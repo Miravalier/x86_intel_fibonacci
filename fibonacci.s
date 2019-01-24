@@ -35,9 +35,10 @@ main:
     mov     [.argc],    edi
     mov     [.argv],    rsi
 
-    # Set current to 1 and previous to 0
+    # Set current, index, and previous
     mov     QWORD PTR [.current],   1
     mov     QWORD PTR [.previous],  0
+    mov     QWORD PTR [.index],     1
 
     # Validate argc == 2
     cmp     edi,    2   # Compare argc to 2
@@ -86,8 +87,20 @@ main:
     jmp     .L_main_end
 
 .L_main_regular_case:
-    jmp     .L_main_end
+    call    big_add
 
+    # Increment index
+    inc     QWORD PTR [.index]
+
+    # Check for loop end or restart
+    mov     rax,        [.limit]
+    cmp     [.index],   rax
+    je      .L_main_loop_end
+    jmp     .L_main_regular_case
+
+.L_main_loop_end:
+    # Print result
+    call    big_print
 .L_main_end:
     # Set return value
     mov     eax,    0
@@ -95,7 +108,6 @@ main:
     # Restore base pointer and return
     pop     rbp
     ret
-
 
 .L_error_out:
     ARGV    0
@@ -106,6 +118,7 @@ main:
     call    fprintf     # Call printf
     mov	    edi,    1   # Ready exit parameter
     call	exit        # Exit the program
+
 
 .type   big_print, @function
 big_print:
@@ -122,7 +135,6 @@ big_print:
     xor     eax,    eax
     call    sprintf
 
-
     # Append 0x
     mov     edi,    '0' # Move '0' into first param of putchar
     call    putchar     # Call putchar
@@ -134,11 +146,8 @@ big_print:
     mov     rdi,    rax             # Move ptr into first param of puts
     call    puts                    # Call puts
 
-    # Print trailing newline
-    mov     edi,    '\n'    # Move '\n' into first param of putchar
-    call    putchar         # Call putchar
-
     ret
+
 
 .type   big_add, @function
 big_add:
@@ -161,6 +170,7 @@ big_add:
     mov     [.previous+8],   rax    # tmp[1] = a
     
     ret
+
 
 .type   big_cpy, @function
 big_cpy:
