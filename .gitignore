@@ -1,0 +1,5 @@
+fibonacci
+*.o
+*.c
+*.a
+*.txt
