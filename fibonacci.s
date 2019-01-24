@@ -7,6 +7,11 @@
 .section    .data
     .argc:      .long   0
     .argv:      .space  8,  0
+    .index:     .long   0
+    .limit:     .long   0
+    .previous:  .space  32, 0
+    .current:   .space  32, 0
+    .tmp:       .space  32, 0
 
 .macro  ARGV    INDEX=1
 mov     rax,    .argv           # Get ARGV address in memory
@@ -27,9 +32,11 @@ main:
     mov     [.argc],    edi
     mov     [.argv],    rsi
 
+    # Validate cmd line arguments
+    cmp     edi,    2   # Compare argc to 2
+    jne     error_out   # Error with usage if !=
+    
     # Main program code
-    cmp     edi,    2
-    jne     error_out
 
     # Set return value
     mov     eax,    0
