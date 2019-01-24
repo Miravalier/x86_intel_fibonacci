@@ -3,17 +3,18 @@
 .section    .rodata
     .USAGE:     .string "usage: %s <0 .. n .. 100>\n"
     .LONG_FMT:  .string "%ld"
-    .HEX_FMT:   .string "%lx"
+    .HEX_FMT:   .string "%08lX"
 
 .section    .data
     .argc:      .long   0
     .argv:      .space  8,  0
     .index:     .space  8,  0
     .limit:     .space  8,  0
-    .previous:  .space  32, 0
-    .current:   .space  32, 0
-    .tmp:       .space  32, 0
+    .previous:  .space  16, 0
+    .current:   .space  16, 0
+    .tmp:       .space  16, 0
     .end_ptr:   .space  8,  0
+    .hex_buff:  .space  64, 0
 
 .macro  ARGV    INDEX=1
 mov     rax,    .argv           # Get ARGV address in memory
@@ -68,9 +69,20 @@ main:
     jmp     .L_main_base_case
     
 .L_main_base_case:
-    mov     rax, [.limit]
-    mov     [.current], rax
-    call    big_print
+    # Print 0x prefix
+    mov     edi,    '0'
+    call    putchar
+    mov     edi,    'x'
+    call    putchar
+
+    # Print number
+    mov     rdi,    [.limit]
+    add     rdi,    '0'
+    call    putchar
+
+    # Print newline
+    mov     edi,    '\n'
+    call    putchar
     jmp     .L_main_end
 
 .L_main_regular_case:
@@ -97,16 +109,57 @@ main:
 
 .type   big_print, @function
 big_print:
-    mov     rdi,    OFFSET .HEX_FMT
-    mov     rsi,    [.current]
+    # Build an output buffer
+    mov     rdi,    OFFSET .hex_buff    # char* str
+    mov     rsi,    OFFSET .HEX_FMT     # char* format
+    mov     rdx,    [.current+8]        # most significant bytes
     xor     eax,    eax
-    call    printf
-    mov     edi,    '\n'
-    call    putchar
+    call    sprintf
+
+    mov     rdi,    OFFSET .hex_buff+8  # char* str
+    mov     rsi,    OFFSET .HEX_FMT     # char* format
+    mov     rdx,    [.current]          # least significant bytes
+    xor     eax,    eax
+    call    sprintf
+
+
+    # Append 0x
+    mov     edi,    '0' # Move '0' into first param of putchar
+    call    putchar     # Call putchar
+    mov     edi,    'x' # Move '0' into first param of putchar
+    call    putchar     # Call putchar
+
+    # Print hex number
+    mov     rax, OFFSET .hex_buff   # Set ptr to buffer
+    mov     rdi,    rax             # Move ptr into first param of puts
+    call    puts                    # Call puts
+
+    # Print trailing newline
+    mov     edi,    '\n'    # Move '\n' into first param of putchar
+    call    putchar         # Call putchar
+
     ret
 
 .type   big_add, @function
 big_add:
+    # Move current into tmp
+    mov     rax,        [.current]      # a = current[0]
+    mov     [.tmp],     rax             # tmp[0] = a
+    mov     rax,        [.current+8]    # a = current[1]
+    mov     [.tmp+8],   rax             # tmp[1] = a
+
+    # Add previous to current
+    mov     rax,            [.tmp]      # a = tmp[0]
+    add     [.current],     rax         # current[0] += a
+    mov     rax,            [.tmp+8]    # a = tmp[1]
+    adc     [.current+8],   rax         # current[1] += a
+
+    # Move tmp into previous
+    mov     rax,        [.tmp]      # a = current[0]
+    mov     [.previous],     rax    # tmp[0] = a
+    mov     rax,        [.tmp+8]    # a = current[1]
+    mov     [.previous+8],   rax    # tmp[1] = a
+    
     ret
 
 .type   big_cpy, @function
