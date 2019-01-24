@@ -2,7 +2,8 @@
 
 .section    .rodata
     .USAGE:     .string "usage: %s <0 .. n .. 100>\n"
-    .LONG_FMT:  .string "%ld\n"
+    .LONG_FMT:  .string "%ld"
+    .HEX_FMT:   .string "%lx"
 
 .section    .data
     .argc:      .long   0
@@ -33,9 +34,13 @@ main:
     mov     [.argc],    edi
     mov     [.argv],    rsi
 
+    # Set current to 1 and previous to 0
+    mov     QWORD PTR [.current],   1
+    mov     QWORD PTR [.previous],  0
+
     # Validate argc == 2
     cmp     edi,    2   # Compare argc to 2
-    jne     error_out   # Error with usage if !=
+    jne     .L_error_out   # Error with usage if !=
     ARGV    1
 
     # Get limit and validate it is an integer
@@ -48,16 +53,30 @@ main:
     mov     rsi,        [rsi]       # Get char* value in **rsi
     mov     al,         [rsi]       # Get the char in *rsi
     cmp     al,         0           # Check character against NULL
-    jne     error_out               # Exit if character != NULL
+    jne     .L_error_out               # Exit if character != NULL
 
     # Validate 0 <= limit <= 100
     cmp     QWORD PTR [.limit], 0   # Compare limit against 0
-    jl      error_out               # If <, error out
+    jl      .L_error_out               # If <, error out
     cmp     QWORD PTR [.limit], 100 # Compare limit against 100
-    jg      error_out               # If >, error out
-    
-    # Main program code
+    jg      .L_error_out               # If >, error out
 
+    # Check for full cases
+    cmp     QWORD PTR [.limit], 1
+    jg      .L_main_regular_case
+    # Default to base case
+    jmp     .L_main_base_case
+    
+.L_main_base_case:
+    mov     rax, [.limit]
+    mov     [.current], rax
+    call    big_print
+    jmp     .L_main_end
+
+.L_main_regular_case:
+    jmp     .L_main_end
+
+.L_main_end:
     # Set return value
     mov     eax,    0
 
@@ -65,7 +84,8 @@ main:
     pop     rbp
     ret
 
-error_out:
+
+.L_error_out:
     ARGV    0
     mov     rdi,    QWORD PTR stderr[rip]   # Err Stream
     mov     rsi,    OFFSET  .USAGE          # Usage Fmt
@@ -77,6 +97,12 @@ error_out:
 
 .type   big_print, @function
 big_print:
+    mov     rdi,    OFFSET .HEX_FMT
+    mov     rsi,    [.current]
+    xor     eax,    eax
+    call    printf
+    mov     edi,    '\n'
+    call    putchar
     ret
 
 .type   big_add, @function
