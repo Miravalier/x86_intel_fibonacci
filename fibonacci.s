@@ -1,17 +1,18 @@
 .intel_syntax   noprefix
 
 .section    .rodata
-    .USAGE:     .string "usage: %s <int>\n"
+    .USAGE:     .string "usage: %s <0 .. n .. 100>\n"
     .LONG_FMT:  .string "%ld\n"
 
 .section    .data
     .argc:      .long   0
     .argv:      .space  8,  0
-    .index:     .long   0
-    .limit:     .long   0
+    .index:     .space  8,  0
+    .limit:     .space  8,  0
     .previous:  .space  32, 0
     .current:   .space  32, 0
     .tmp:       .space  32, 0
+    .end_ptr:   .space  8,  0
 
 .macro  ARGV    INDEX=1
 mov     rax,    .argv           # Get ARGV address in memory
@@ -32,9 +33,28 @@ main:
     mov     [.argc],    edi
     mov     [.argv],    rsi
 
-    # Validate cmd line arguments
+    # Validate argc == 2
     cmp     edi,    2   # Compare argc to 2
     jne     error_out   # Error with usage if !=
+    ARGV    1
+
+    # Get limit and validate it is an integer
+    mov     rdi,    rax             # Str
+    mov     rsi,    OFFSET .end_ptr # End
+    mov     rdx,    0               # Base
+    call    strtol
+    mov     [.limit],   rax         # Move return of strtol into limit
+    lea     rsi,        .end_ptr    # Get the endptr again, rsi is not preserved
+    mov     rsi,        [rsi]       # Get char* value in **rsi
+    mov     al,         [rsi]       # Get the char in *rsi
+    cmp     al,         0           # Check character against NULL
+    jne     error_out               # Exit if character != NULL
+
+    # Validate 0 <= limit <= 100
+    cmp     QWORD PTR [.limit], 0   # Compare limit against 0
+    jl      error_out               # If <, error out
+    cmp     QWORD PTR [.limit], 100 # Compare limit against 100
+    jg      error_out               # If >, error out
     
     # Main program code
 
@@ -54,3 +74,15 @@ error_out:
     call    fprintf     # Call printf
     mov	    edi,    1   # Ready exit parameter
     call	exit        # Exit the program
+
+.type   big_print, @function
+big_print:
+    ret
+
+.type   big_add, @function
+big_add:
+    ret
+
+.type   big_cpy, @function
+big_cpy:
+    ret
