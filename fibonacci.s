@@ -7,6 +7,7 @@
     .OCT_FMT:   .string "%021lo"
 
 .section    .data
+    .pflag:     .byte   0
     .out_buff:  .space  64, 0
     .previous:  .space  16, 0
     .current:
@@ -55,9 +56,11 @@ main:
     jne     .L_param_int            # Jump if a0 != - to process limit
     cmp     BYTE PTR [rax+1],   'o' # Check for o
     jne     .L_param_int            # Jump if a1 != o to process limit
-    jmp     .L_param_oflag
+    cmp     BYTE PTR [rax+2],   0   # Check for null terminator
+    je      .L_param_oflag
+    jmp     .L_error_out            # If its not an integer and not -o, error
     .L_param_inc_loop:
-    inc     rcx             # Increment counter
+    inc     rcx                     # Increment counter
     cmp     ecx,    [.argc]
     jl      .L_param_loop
     jmp     .L_param_loop_end
@@ -67,6 +70,9 @@ main:
     jmp     .L_param_inc_loop
     .L_param_int:
     # Get limit and validate it is an integer
+    cmp     BYTE PTR [.pflag],  1   # Check for previous int
+    je      .L_error_out
+    mov     BYTE PTR [.pflag],  1   # Set flag for next time
     mov     rdi,    rax             # Str
     mov     rsi,    OFFSET .end_ptr # End
     mov     rdx,    0               # Base
@@ -83,6 +89,10 @@ main:
     jmp     .L_param_inc_loop
 
     .L_param_loop_end:
+    # Validate a limit was passed
+    cmp     BYTE PTR [.pflag],  1
+    jne     .L_error_out
+
     # Validate 0 <= limit <= 100
     cmp     QWORD PTR [.limit], 0   # Compare limit against 0
     jl      .L_error_out            # If <, error out
