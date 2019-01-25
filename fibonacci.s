@@ -1,7 +1,7 @@
 .intel_syntax   noprefix
 
 .section    .rodata
-    .USAGE:     .string "usage: %s <0 .. n .. 100>\n"
+    .USAGE:     .string "usage: %s <0 .. n .. 100> [-o]\n"
     .DEC_FMT:   .string "%04ld"
     .OCT_FMT:   .string "%021lo"
 
