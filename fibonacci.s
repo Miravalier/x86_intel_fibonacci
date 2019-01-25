@@ -3,7 +3,7 @@
 .section    .rodata
     .USAGE:     .string "usage: %s <0 .. n .. 100>\n"
     .LONG_FMT:  .string "%ld"
-    .HEX_FMT:   .string "%08lX"
+    .HEX_FMT:   .string "%016lX"
 
 .section    .data
     .argc:      .long   0
@@ -87,6 +87,7 @@ main:
     jmp     .L_main_end
 
 .L_main_regular_case:
+    # Move to next fibonacci number
     call    big_add
 
     # Increment index
@@ -129,7 +130,7 @@ big_print:
     xor     eax,    eax
     call    sprintf
 
-    mov     rdi,    OFFSET .hex_buff+8  # char* str
+    mov     rdi,    OFFSET .hex_buff+16 # char* str
     mov     rsi,    OFFSET .HEX_FMT     # char* format
     mov     rdx,    [.current]          # least significant bytes
     xor     eax,    eax
@@ -141,9 +142,18 @@ big_print:
     mov     edi,    'x' # Move '0' into first param of putchar
     call    putchar     # Call putchar
 
-    # Print hex number
-    mov     rax, OFFSET .hex_buff   # Set ptr to buffer
-    mov     rdi,    rax             # Move ptr into first param of puts
+    # Trim leading zeroes from buffer
+    mov     rax,    OFFSET .hex_buff    # Move hex_buff ptr into rax
+
+.L_big_print_loop:
+    add     rax,            1       # Move to next char
+    cmp     BYTE PTR [rax], '0'     # Compare current value to '0'
+    jne     .L_big_print_loop_end   # If != '0', we're done
+    jmp     .L_big_print_loop       # Else increment again
+
+.L_big_print_loop_end:
+    # Print remaining hex number
+    mov     rdi,            rax     # Move ptr into first param
     call    puts                    # Call puts
 
     ret
@@ -158,16 +168,16 @@ big_add:
     mov     [.tmp+8],   rax             # tmp[1] = a
 
     # Add previous to current
-    mov     rax,            [.tmp]      # a = tmp[0]
-    add     [.current],     rax         # current[0] += a
-    mov     rax,            [.tmp+8]    # a = tmp[1]
-    adc     [.current+8],   rax         # current[1] += a
+    mov     rax,            [.previous]     # a = previous[0]
+    add     [.current],     rax             # current[0] += a
+    mov     rax,            [.previous+8]   # a = previous[1]
+    adc     [.current+8],   rax             # current[1] += a
 
     # Move tmp into previous
-    mov     rax,        [.tmp]      # a = current[0]
-    mov     [.previous],     rax    # tmp[0] = a
-    mov     rax,        [.tmp+8]    # a = current[1]
-    mov     [.previous+8],   rax    # tmp[1] = a
+    mov     rax,            [.tmp]      # a = current[0]
+    mov     [.previous],    rax         # tmp[0] = a
+    mov     rax,            [.tmp+8]    # a = current[1]
+    mov     [.previous+8],  rax         # tmp[1] = a
     
     ret
 
