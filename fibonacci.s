@@ -4,17 +4,20 @@
     .USAGE:     .string "usage: %s <0 .. n .. 100>\n"
     .LONG_FMT:  .string "%ld"
     .HEX_FMT:   .string "%016lX"
+    .OCT_FMT:   .string "%016lo"
 
 .section    .data
-    .argc:      .long   0
-    .argv:      .space  8,  0
-    .index:     .space  8,  0
-    .limit:     .space  8,  0
+    .hex_buff:  .space  64, 0
     .previous:  .space  16, 0
     .current:   .space  16, 0
     .tmp:       .space  16, 0
+    .fmt_ptr:   .space  8,  0
+    .argv:      .space  8,  0
+    .index:     .space  8,  0
+    .limit:     .space  8,  0
     .end_ptr:   .space  8,  0
-    .hex_buff:  .space  64, 0
+    .argc:      .long   0
+    .fmt_pfx:   .byte   'x'
 
 .macro  ARGV    INDEX=1
 mov     rax,    .argv           # Get ARGV address in memory
@@ -35,10 +38,11 @@ main:
     mov     [.argc],    edi
     mov     [.argv],    rsi
 
-    # Set current, index, and previous
+    # Set static values
     mov     QWORD PTR [.current],   1
     mov     QWORD PTR [.previous],  0
     mov     QWORD PTR [.index],     1
+    mov     QWORD PTR [.fmt_ptr],   OFFSET .HEX_FMT
 
     # Validate argc == 2
     cmp     edi,    2   # Compare argc to 2
@@ -73,7 +77,9 @@ main:
     # Print 0x prefix
     mov     edi,    '0'
     call    putchar
-    mov     edi,    'x'
+    xor     eax,    eax                 # Zero eax
+    mov     al,     BYTE PTR [.fmt_pfx] # Get format char
+    mov     edi,    eax                 # Provide to putchar
     call    putchar
 
     # Print number
@@ -125,22 +131,24 @@ main:
 big_print:
     # Build an output buffer
     mov     rdi,    OFFSET .hex_buff    # char* str
-    mov     rsi,    OFFSET .HEX_FMT     # char* format
+    mov     rsi,    [.fmt_ptr]          # char* format
     mov     rdx,    [.current+8]        # most significant bytes
     xor     eax,    eax
     call    sprintf
 
     mov     rdi,    OFFSET .hex_buff+16 # char* str
-    mov     rsi,    OFFSET .HEX_FMT     # char* format
+    mov     rsi,    [.fmt_ptr]          # char* format
     mov     rdx,    [.current]          # least significant bytes
     xor     eax,    eax
     call    sprintf
 
     # Append 0x
-    mov     edi,    '0' # Move '0' into first param of putchar
-    call    putchar     # Call putchar
-    mov     edi,    'x' # Move '0' into first param of putchar
-    call    putchar     # Call putchar
+    mov     edi,    '0'         # Move '0' into first param of putchar
+    call    putchar
+    xor     eax,    eax                 # Zero eax
+    mov     al,     BYTE PTR [.fmt_pfx] # Get format char
+    mov     edi,    eax                 # Provide to putchar
+    call    putchar                     # Call putchar
 
     # Trim leading zeroes from buffer
     mov     rax,    OFFSET .hex_buff    # Move hex_buff ptr into rax
