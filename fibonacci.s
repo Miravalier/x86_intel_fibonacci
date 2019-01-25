@@ -155,15 +155,23 @@ big_print:
     jmp     .L_big_print_oct    # Else
 
 .L_big_print_oct:
+    # Move highest bit of lower value into lowest bit
+    # of higher value ... 
+    # 000 011 100 011  =  000 111 000 011
+    shl     QWORD PTR [.current+8], 1
+    shl     QWORD PTR [.current],   1
+    adc     QWORD PTR [.current+8], 0
+    shr     QWORD PTR [.current],   1
+
     # Build an output buffer
     mov     rdi,    OFFSET .out_buff    # char* str
-    mov     rsi,    OFFSET [.HEX_FMT]   # char* format
+    mov     rsi,    OFFSET [.OCT_FMT]   # char* format
     mov     rdx,    [.current+8]        # most significant bytes
     xor     eax,    eax
     call    sprintf
 
-    mov     rdi,    OFFSET .out_buff+16 # char* str
-    mov     rsi,    OFFSET [.HEX_FMT]   # char* format
+    mov     rdi,    OFFSET .out_buff+21 # char* str
+    mov     rsi,    OFFSET [.OCT_FMT]   # char* format
     mov     rdx,    [.current]          # least significant bytes
     xor     eax,    eax
     call    sprintf
@@ -236,9 +244,4 @@ big_add:
     mov     rax,            [.tmp+8]    # a = current[1]
     mov     [.previous+8],  rax         # tmp[1] = a
     
-    ret
-
-
-.type   big_cpy, @function
-big_cpy:
     ret
