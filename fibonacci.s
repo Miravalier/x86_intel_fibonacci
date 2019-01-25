@@ -4,24 +4,27 @@
     .USAGE:     .string "usage: %s <0 .. n .. 100>\n"
     .LONG_FMT:  .string "%ld"
     .HEX_FMT:   .string "%016lX"
-    .OCT_FMT:   .string "%016lo"
+    .OCT_FMT:   .string "%021lo"
 
 .section    .data
-    .hex_buff:  .space  64, 0
+    .out_buff:  .space  64, 0
     .previous:  .space  16, 0
-    .current:   .space  16, 0
+    .current:
+        .byte   1
+        .space  15, 0
     .tmp:       .space  16, 0
-    .fmt_ptr:   .space  8,  0
     .argv:      .space  8,  0
-    .index:     .space  8,  0
+    .index:
+        .byte   1
+        .space  7,  0
     .limit:     .space  8,  0
     .end_ptr:   .space  8,  0
     .argc:      .long   0
-    .fmt_pfx:   .byte   'x'
+    .fmt:       .byte   'x'
 
 .macro  ARGV    INDEX=1
-mov     rax,    .argv           # Get ARGV address in memory
 mov     rdx,    \INDEX          # Get INDEX into a register
+mov     rax,    .argv           # Get ARGV address in memory
 shl     rdx,    3               # Multiply INDEX by 8
 add     rax,    rdx             # Add OFFSET to ARGV
 mov     rax,    QWORD PTR [rax] # Move ARGV[INDEX] into rdi
@@ -38,34 +41,53 @@ main:
     mov     [.argc],    edi
     mov     [.argv],    rsi
 
-    # Set static values
-    mov     QWORD PTR [.current],   1
-    mov     QWORD PTR [.previous],  0
-    mov     QWORD PTR [.index],     1
-    mov     QWORD PTR [.fmt_ptr],   OFFSET .HEX_FMT
+    # Make sure at least 2 args
+    cmp     edi,    2       # Compare argc to 2
+    jl     .L_error_out     # Error with usage if <
 
-    # Validate argc == 2
-    cmp     edi,    2   # Compare argc to 2
-    jne     .L_error_out   # Error with usage if !=
-    ARGV    1
-
+    # Get each argv from 1 on
+    mov     rcx,    1
+    .L_param_loop:
+    push    rcx
+    ARGV    rcx                     # Get next arg into rax
+    pop     rcx
+    cmp     BYTE PTR [rax],     '-' # Check for -
+    jne     .L_param_int            # Jump if a0 != - to process limit
+    cmp     BYTE PTR [rax+1],   'o' # Check for o
+    jne     .L_param_int            # Jump if a1 != o to process limit
+    jmp     .L_param_oflag
+    .L_param_inc_loop:
+    inc     rcx             # Increment counter
+    cmp     ecx,    [.argc]
+    jl      .L_param_loop
+    jmp     .L_param_loop_end
+    .L_param_oflag:
+    # Process -o flag
+    mov     BYTE PTR [.fmt],    'o'
+    jmp     .L_param_inc_loop
+    .L_param_int:
     # Get limit and validate it is an integer
     mov     rdi,    rax             # Str
     mov     rsi,    OFFSET .end_ptr # End
     mov     rdx,    0               # Base
+    push    rcx
     call    strtol
+    pop     rcx
     mov     [.limit],   rax         # Move return of strtol into limit
     lea     rsi,        .end_ptr    # Get the endptr again, rsi is not preserved
     mov     rsi,        [rsi]       # Get char* value in **rsi
+    xor     eax,        eax         # Zero RAX
     mov     al,         [rsi]       # Get the char in *rsi
     cmp     al,         0           # Check character against NULL
-    jne     .L_error_out               # Exit if character != NULL
+    jne     .L_error_out            # Exit if character != NULL
+    jmp     .L_param_inc_loop
 
+    .L_param_loop_end:
     # Validate 0 <= limit <= 100
     cmp     QWORD PTR [.limit], 0   # Compare limit against 0
-    jl      .L_error_out               # If <, error out
+    jl      .L_error_out            # If <, error out
     cmp     QWORD PTR [.limit], 100 # Compare limit against 100
-    jg      .L_error_out               # If >, error out
+    jg      .L_error_out            # If >, error out
 
     # Check for full cases
     cmp     QWORD PTR [.limit], 1
@@ -77,9 +99,9 @@ main:
     # Print 0x prefix
     mov     edi,    '0'
     call    putchar
-    xor     eax,    eax                 # Zero eax
-    mov     al,     BYTE PTR [.fmt_pfx] # Get format char
-    mov     edi,    eax                 # Provide to putchar
+    xor     eax,    eax             # Zero eax
+    mov     al,     BYTE PTR [.fmt] # Get format char
+    mov     edi,    eax             # Provide to putchar
     call    putchar
 
     # Print number
@@ -126,32 +148,59 @@ main:
     mov	    edi,    1   # Ready exit parameter
     call	exit        # Exit the program
 
-
-.type   big_print, @function
+.type   big_print,  @function
 big_print:
+    cmp     BYTE PTR [.fmt], 'x'  # Format == x
+    je      .L_big_print_hex    # If
+    jmp     .L_big_print_oct    # Else
+
+.L_big_print_oct:
     # Build an output buffer
-    mov     rdi,    OFFSET .hex_buff    # char* str
-    mov     rsi,    [.fmt_ptr]          # char* format
+    mov     rdi,    OFFSET .out_buff    # char* str
+    mov     rsi,    OFFSET [.HEX_FMT]   # char* format
     mov     rdx,    [.current+8]        # most significant bytes
     xor     eax,    eax
     call    sprintf
 
-    mov     rdi,    OFFSET .hex_buff+16 # char* str
-    mov     rsi,    [.fmt_ptr]          # char* format
+    mov     rdi,    OFFSET .out_buff+16 # char* str
+    mov     rsi,    OFFSET [.HEX_FMT]   # char* format
+    mov     rdx,    [.current]          # least significant bytes
+    xor     eax,    eax
+    call    sprintf
+
+    # Append 0o
+    mov     edi,    '0'                 # Move '0' into first param of putchar
+    call    putchar
+    mov     edi,    'o'                 # Provide param to putchar
+    call    putchar                     # Call putchar
+
+    # Trim leading zeroes from buffer
+    mov     rax,    OFFSET .out_buff    # Move buff ptr into rax
+    jmp     .L_big_print_loop
+
+.L_big_print_hex:
+    # Build an output buffer
+    mov     rdi,    OFFSET .out_buff    # char* str
+    mov     rsi,    OFFSET [.HEX_FMT]   # char* format
+    mov     rdx,    [.current+8]        # most significant bytes
+    xor     eax,    eax
+    call    sprintf
+
+    mov     rdi,    OFFSET .out_buff+16 # char* str
+    mov     rsi,    OFFSET [.HEX_FMT]   # char* format
     mov     rdx,    [.current]          # least significant bytes
     xor     eax,    eax
     call    sprintf
 
     # Append 0x
-    mov     edi,    '0'         # Move '0' into first param of putchar
+    mov     edi,    '0'                 # Move '0' into first param of putchar
     call    putchar
-    xor     eax,    eax                 # Zero eax
-    mov     al,     BYTE PTR [.fmt_pfx] # Get format char
-    mov     edi,    eax                 # Provide to putchar
+    mov     edi,     'x'                # Get format char
     call    putchar                     # Call putchar
 
     # Trim leading zeroes from buffer
-    mov     rax,    OFFSET .hex_buff    # Move hex_buff ptr into rax
+    mov     rax,    OFFSET .out_buff    # Move buff ptr into rax
+    jmp     .L_big_print_loop
 
 .L_big_print_loop:
     add     rax,            1       # Move to next char
